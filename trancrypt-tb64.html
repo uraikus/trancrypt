@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <title>Trancrypter</title>
+  <style>
+   ::backdrop {
+    backdrop-filter: blur(3px);
+    rgb(0 0 0 / .6);
+   }
+   html {
+    background: linear-gradient(to bottom right, rgb(30 30 30), rgb(20 20 80)) fixed;
+    color: white;
+   }
+   h3 {
+    margin: 15px 0 0;
+    padding: 0;
+   }
+   div, flex input {
+    margin: 5px;
+    padding: 3px;
+   }
+   btn {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 0 3px black;
+    border-radius: 3px;
+    padding: 4px;
+    margin: 0 5px;
+    height: 20px;
+    background-color: silver;
+    color: black;
+    user-select: none;
+    transition: color .6s, box-shadow .6s;
+   }
+   btn:hover {
+    color: rgb(20 20 120);
+    box-shadow: 0 0 3px rgb(200 200 250);
+   }
+   btn[hidden] {
+    display: none;
+   }
+   flex {
+    display: flex;
+    margin: 5px;
+    align-items: center;
+   }
+   grow {
+    flex-grow: 1;
+   }
+   flex > div, flex input {
+    border: 3px outset black;
+    border-radius: 8px;
+    outline: none;
+    box-shadow: 0 0 3px black;
+    background-color: white;
+    color: black;
+    min-height: 30px;
+    font-family: "Times New Roman";
+   }
+   flex input {
+    flex-grow: 1;
+   }
+   flex > div {
+    width: 50%;
+   }
+   #notifications {
+    position: fixed;
+    top: 5px;
+    right: 5px;
+    width: 250px;
+   }
+   #notifications .notification {
+    background-color: rgb(40 40 40);
+    color: white;
+    box-shadow: 0 0 3px black;
+    border-radius: 3px;
+    padding: 3px;
+    margin: 5px 0;
+    font-size: x-large;
+    text-align: center;
+   }
+  </style>
+  <script>onerror = (message, source, lineno, colno, error) => window.alert([lineno, colno, error].join(' '));</script>
+  <script>
+const maxNumber = 4_294_967_295;
+const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const qs = q => document.querySelector(q);
+const qsa = q => document.querySelectorAll(q);
+
+var key, keyName, encryptTimeout;
+
+function notify(text) {
+ let n = document.createElement('div');
+ n.className = 'notification';
+ n.innerText = text;
+ qs('#notifications').append(n);
+ setTimeout(() => n.remove(), 4000);
+}
+
+function cRandBase64() {
+ const newArray = [];
+ let b64c = base64Chars.split('');
+ while (newArray.length < 64) {
+  let uint32 = new Uint32Array(1);
+  crypto.getRandomValues(uint32);
+  let float = uint32[0] / maxNumber;
+  let [randomChar] = b64c.splice(Math.floor(float * b64c.length), 1);
+  newArray.push(randomChar);
+ }
+ return newArray.join('');
+}
+
+function renderEncryptionTimeout() {
+ clearTimeout(encryptTimeout);
+ encryptTimeout = setTimeout(renderEncryption, 1200);
+}
+
+async function renderEncryption() {
+  let encryptInput = qs('#encrypt');
+  let encryptOutput = qs('#render-encrypt');
+  encryptOutput.value = await encrypt(encryptInput.innerHTML);
+  qs('#decrypt').value = encryptOutput.value;
+  renderDecryption();
+}
+
+async function renderDecryption() {
+  try {
+  let decryptInput = qs('#decrypt');
+  let decryptOutput = qs('#render-decrypt');
+  if (!decryptInput.value) return decryptOutput.innerHTML = '';
+  let decryptedData = await decrypt(decryptInput.value);
+  decryptOutput.innerHTML = base64ToUnicode(decryptedData);
+  } catch(err) {alert('renderDecryption(): ' + err.stack)}
+}
+
+async function encrypt(input) {
+ if (!input) return '';
+ let salt = cRandBase64();
+ let liveKey = calibrate(salt);
+ let b64Data = await toBase64(input);
+ try {
+  let returnStr = [salt + ','];
+  for (let x = 0; x < b64Data.length; x++) {
+   let uint8 = new Uint8Array(1);
+   crypto.getRandomValues(uint8);
+   if (b64Data[x] === '=') {
+    returnStr.push('=');
+    continue;
+   } else if (uint8 < 25) {
+    shiftSeries(liveKey);
+    returnStr.push('?');
+    continue;
+   }
+   let step = nextLine(liveKey);
+   let charLoc = base64Chars.indexOf(b64Data[x]);
+   if (charLoc === -1) throw 'Bad character!';
+   let char = step[charLoc];
+   returnStr.push(char);
+  }
+  return returnStr.join('');
+ } catch(err) {alert('encrypt(): ' + err.stack)}
+
+ function toBase64(data) {
+  return new Promise((resolve, reject) => {
+   let file = data instanceof File ? data : new Blob([data], {type: 'octet-stream'});
+   const reader = new FileReader();
+   reader.onload = () => resolve(reader.result.split(",")[1]);
+   reader.onerror = reject;
+   reader.readAsDataURL(file);
+  });
+ }
+}
+
+function base64ToUnicode(base64) {
+ if (!base64) return '';
+ const binary = atob(base64);
+ const bytes = new Uint8Array([...binary].map(char => char.charCodeAt(0)));
+ return new TextDecoder().decode(bytes);
+}
+
+function base64ToBinary(base64) {
+ const binaryString = atob(base64);
+ const binaryData = new Uint8Array(binaryString.length);
+ for (let i = 0; i < binaryString.length; i++) {
+  binaryData[i] = binaryString.charCodeAt(i);
+ }
+ return binaryData;
+}
+
+async function decrypt(input) {
+ if (!input) return '';
+ try {
+  if (input instanceof File) input = await input.text();
+  let [cal,b64Data] = input.split(',');
+  let liveKey = calibrate(cal);
+  let returnStr = [];
+  for (let x = 0; x < b64Data.length; x++) {
+   if (b64Data[x] === '=') {
+    returnStr.push('=');
+    continue;
+   } else if (b64Data[x] === '?') {
+    shiftSeries(liveKey);
+    continue;
+   }
+   let step = nextLine(liveKey);
+   let charLoc = step.indexOf(b64Data[x]);
+   if (charLoc === -1) throw 'Bad character!';
+   let char = base64Chars[charLoc];
+   returnStr.push(char);
+  }
+  return returnStr.join('');
+ } catch(err) {alert('decrypt(): ' + err)}
+}
+
+function calibrate(cal) {
+  let liveKey = Array.from(key);
+  liveKey.shift();
+  liveKey.unshift(cal);
+  for (let x = 0; x < 256; x++) nextLine(liveKey);
+  return liveKey;
+}
+
+function shiftSeries(key) {
+ let firstLine = key.shift().split('');
+ let values = {};
+ for (let x = 255; x !== 0; x--) values[firstLine[x]] = 63 - x;
+ let returnStr = [];
+ for (let col = 0; col < 64; col++) {
+  let columnValue = 0;
+  for (let row = 0; row < 64; row++) {
+   columnValue += values[key[row][col]];
+   }
+  let [char] = firstLine.splice(columnValue % firstLine.length, 1);
+  returnStr.push(char);
+ }
+ key.push(returnStr.join(''));
+ return returnStr.join('');
+}
+
+function nextLine(key) {
+ let firstLine = key.shift().split('');
+ let values = {};
+ firstLine.forEach((v, i) => values[v] = i);
+ let returnStr = [];
+ for (let col = 0; col < 64; col++) {
+  let columnValue = 0;
+  for (let row = 0; row < 255; row++) {
+   columnValue += values[key[row][col]];
+   }
+  let [char] = firstLine.splice(columnValue % firstLine.length, 1);
+  returnStr.push(char);
+ }
+ key.push(returnStr.join(''));
+ return returnStr.join('');
+}
+
+function toBase64(data) {
+ return new Promise((resolve, reject) => {
+  let file = data instanceof File ? data : new Blob([data], {type: 'octet-stream'});
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result.split(",")[1]);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+ });
+}
+
+async function importKey() {
+ const file = await openFile('Trancrypt Base64 Symmetrical Key', '.tb64');
+ try {
+  const text = await file.text();
+  key = text.split('\n');
+  keyName = key.shift();
+  qs('#key-name').textContent = keyName;
+  renderEncryption();
+  qs('#save-key').textContent = JSON.stringify({key});
+  document.title = 'Trancrypter | ' + keyName;
+ } catch (err) {
+  alert("Error importing key:", err);
+ }
+}
+
+async function openFile(description, accept) {
+ const [fileHandle] = await window.showOpenFilePicker({
+  types: [{
+   description,
+   accept: accept ? { 'application/octet-stream': [accept] } : undefined
+  }],
+  multiple: false
+ });
+ const file = await fileHandle.getFile();
+ return file;
+}
+
+function exportKey() {
+ let name = keyName + '.tb64';
+ let data = [keyName].concat(key).join('\n');
+ let description = 'Trancrypt Base64 Symmetrical Key';
+ saveFile(name, data, description);
+}
+
+async function saveFile(name, data, description) {
+ try {
+  const ext = '.' + name.split('.').pop();
+  const handle = await window.showSaveFilePicker({
+   suggestedName: name,
+   types: [{
+    description: description || 'Trancrypt File',
+    accept: { 'application/octet-stream': [ext] }
+   }]
+  });
+  const writable = await handle.createWritable();
+  await writable.write(data);
+  await writable.close();
+ } catch (err) {
+  alert("Error saving file: " + err);
+ }
+}
+
+async function downloadEncryptedData() {
+ saveFile('encrypted.txt.tb64f', qs('#render-encrypt').value);
+}
+
+async function encryptFile() {
+ let d = qs('dialog');
+ let download = qs('#download');
+ let mode = qs('#mode');
+ mode.innerText = 'encrypting...';
+ d.showModal();
+ const file = await openFile();
+ const data = await encrypt(file);
+ mode.innerText = 'encryption complete';
+ download.hidden = false;
+ download.onclick = async () => {
+  try {
+   await saveFile(file.name + '.tb64f', base64ToBinary(data));
+  } catch(err){}
+  download.hidden = true;
+  d.close();
+ }
+}
+
+async function decryptFile(binary) {
+ let d = qs('dialog');
+ let download = qs('#download');
+ let mode = qs('#mode');
+ mode.innerText = 'decrypting...';
+ d.showModal();
+ const file = await openFile();
+ const binaryData = await file.arrayBuffer();
+ if (binary) data = binaryData();
+ let data = await decrypt(text);
+ if (binary) data = base64ToBinary(data);
+ else data = base64ToUnicode(data);
+ mode.innerText = 'decryption complete';
+ download.hidden = false;
+ download.onclick = async () => {
+  try {
+   await saveFile(file.name.replace(/.tb64f$/, ''), data);
+  } catch(err){}
+  download.hidden = true;
+  d.close();
+ }
+}
+
+function rekey() {
+ keyName = crypto.randomUUID();
+ key = new Array(256).fill(0).map(() => cRandBase64());
+ qs('#key-name').textContent = keyName;
+ renderEncryption();
+ let keyElem = qs('#save-key');
+ if (!keyElem) {
+  keyElem = document.createElement('script');
+  keyElem.type = 'application/json';
+  keyElem.id = 'save-key';
+  document.head.append(keyElem);
+ }
+ keyElem.textContent = JSON.stringify({key});
+ document.title = 'Trancrypter | ' + keyName;
+}
+
+addEventListener('load', load);
+async function load() {
+ let keyElem = qs('#save-key');
+ if (keyElem) {
+  let saveKey = JSON.parse(keyElem.textContent);
+  key = saveKey.key;
+  keyName = qs('#key-name').textContent;
+ } else rekey();
+}
+</script>
+ </head>
+
+<body>
+ <btn onclick="importKey()">Import Key</btn>
+ <btn onclick="exportKey()">Export Key</btn>
+ <btn onclick="rekey()">Rekey</btn>
+ <div>
+  <b>Key Name:</b> <span id="key-name"></span>
+ </div>
+ <h3>Encrypt</h3>
+ <flex><div id="encrypt" oninput="renderEncryptionTimeout()" contenteditable></div><input id="render-encrypt" readonly onclick="this.select(); navigator.clipboard.writeText(this.value); notify('Copied to clipboard!');"><btn onclick="downloadEncryptedData()">Download File</btn></flex>
+ <h3>Decrypt</h3>
+ <flex><input id="decrypt" oninput="renderDecryption()"><div id="render-decrypt"></div></flex>
+ <flex>Encrypt File: <btn onclick="encryptFile()">Select File</btn><grow></grow>Decrypt File: <btn onclick="decryptFile()">Select Unicode (txt) File</btn><btn onclick="decryptFile(true)">Select Binary (pdf, exe, etc) File</btn></flex>
+ <dialog>
+  <h1 id="mode"></h1>
+  <btn id="download" hidden>Download File...</btn>
+ </dialog>
+ <div id="notifications"></div>
+</body>
+</html>

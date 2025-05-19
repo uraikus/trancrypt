@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <title>Archtelos Trancrypt</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+   ::backdrop {
+    backdrop-filter: blur(3px);
+    rgb(0 0 0 / .6);
+   }
+   html {
+    background: linear-gradient(to bottom right, rgb(5 5 40), rgb(10 10 60)) fixed;
+    color: white;
+   }
+   h1 {
+    text-align: center;
+   }
+   h1,h2,h3 {
+    margin: 15px 0 0;
+    padding: 0;
+   }
+   table {
+    border-collapse: collapse;
+    border-radius: 2px;
+    box-shadow: 0 0 3px black;
+    margin: 5px;
+   }
+   th, td {
+    border: 1px solid black;
+    padding: 2px;
+   }
+   div, flex input {
+    margin: 5px;
+    padding: 3px;
+   }
+   select {
+    border-radius: 3px;
+    width: 80px;
+    box-shadow: 0 0 3px blue;
+   }
+   btn {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 0 3px black;
+    border-radius: 3px;
+    padding: 4px;
+    margin: 0 5px;
+    height: 20px;
+    background-color: rgb(40 40 40);
+    color: white;
+    user-select: none;
+    transition: color .6s, box-shadow .6s;
+   }
+   btn:hover {
+    color: rgb(120 120 220);
+    box-shadow: 0 0 3px rgb(200 200 250);
+   }
+   btn[hidden] {
+    display: none;
+   }
+   flex {
+    display: flex;
+    margin: 5px;
+    align-items: center;
+   }
+   grow {
+    flex-grow: 1;
+   }
+   flex > div, flex input {
+    border: 3px outset black;
+    border-radius: 8px;
+    outline: none;
+    box-shadow: 0 0 3px black;
+    background-color: white;
+    color: black;
+    min-height: 30px;
+    font-family: "Times New Roman";
+   }
+   flex input {
+    flex-grow: 1;
+   }
+   flex > div {
+    width: 50%;
+   }
+   .view {
+    display: none;
+   }
+   .view[data-selected="true"] {
+    display: block;
+   }
+   #controller btn {
+    margin: 5px 0;
+    border-radius: 0;
+    box-shadow: none;
+    border-left: 1px solid white;
+   }
+   #controller btn[data-selected="true"] {
+    color: black;
+    background-color: white;
+   }
+   #controller btn:first-child {
+    border-left: none;
+    border-radius: 5px 0 0 5px;
+   }
+   #controller btn:last-child {
+    border-radius: 0 5px 5px 0;
+   }
+   #notifications {
+    position: fixed;
+    top: 5px;
+    right: 5px;
+    width: 250px;
+   }
+   #notifications .notification {
+    background-color: rgb(40 40 40);
+    color: white;
+    box-shadow: 0 0 3px black;
+    border-radius: 3px;
+    padding: 3px;
+    margin: 5px 0;
+    font-size: x-large;
+    text-align: center;
+   }
+  </style>
+  <script>onerror = (message, source, lineno, colno, error) => window.alert([lineno, colno, error].join(' '));</script>
+  <script>
+var keyId, keyName, keyBank = Object.create(null), encryptTimeout;
+const qs = q => document.querySelector(q);
+const qsa = q => document.querySelectorAll(q);
+
+Object.defineProperty(window, 'key', {
+ get() {
+  return keyBank[keyId].buffer;
+ },
+ set(k) {
+  keyBank[keyId].buffer = k;
+ },
+ configurable: true
+});
+
+function notify(text) {
+ let n = document.createElement('div');
+ n.className = 'notification';
+ n.innerText = text;
+ qs('#notifications').append(n);
+ setTimeout(() => n.remove(), 7000);
+}
+
+function showView(id, btn) {
+ let sel = qs('.view[data-selected="true"]');
+ if (sel) delete sel.dataset.selected;
+ let selBtn = qs('#controller btn[data-selected="true"]');
+ if (selBtn) delete selBtn.dataset.selected;
+ btn.dataset.selected = 'true';
+ document.getElementById(id).dataset.selected = 'true';
+}
+
+function renderEncryptionTimeout() {
+ clearTimeout(encryptTimeout);
+ encryptTimeout = setTimeout(renderEncryption, 1200);
+}
+
+async function renderEncryption() {
+  let encryptInput = qs('#encrypt');
+  let encryptOutput = qs('#render-encrypt');
+  let encryptedData = await encrypt(encryptInput.innerHTML);
+  encryptOutput.value = encryptedData;
+}
+
+async function renderDecryption() {
+  try {
+   let decryptInput = qs('#decrypt');
+   let decryptOutput = qs('#render-decrypt');
+   if (!decryptInput.value) return decryptOutput.innerHTML = '';
+   let decryptedData = await decrypt(decryptInput.value);
+   decryptOutput.innerHTML = decryptedData;
+  } catch(err) {
+   if (err.stack) alert(err.stack);
+   else notify(err);
+  }
+}
+
+async function encrypt(input) {
+ if (!input) return "";
+ try {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  let encodedData, type;
+  if (input instanceof ArrayBuffer) {
+   type = "ArrayBuffer";
+   encodedData = new Uint8Array(input);
+  } else if (input instanceof File) {
+   type = "File";
+   const fileBuffer = await input.arrayBuffer();
+   encodedData = new Uint8Array(fileBuffer);
+  } else {
+   type = typeof input;
+   const rawData = type === "object" ? JSON.stringify(input) : input.toString();
+   encodedData = new TextEncoder().encode(rawData);
+  }
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encodedData);
+  return JSON.stringify({
+   encrypted: btoa(Array.from(new Uint8Array(encrypted)).map(byte => String.fromCharCode(byte)).join("")),
+   iv: btoa(String.fromCharCode(...iv)),
+   name: keyId,
+   type
+  });
+ } catch (err) {
+  if (err.stack) alert(err.stack);
+  else notify(err);
+ }
+}
+
+async function decrypt(jsonString) {
+ if (!jsonString) return "";
+ try {
+  const { encrypted, iv, type, name } = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+  let key = keyBank[name].buffer;
+  if (!key) throw "Key mismatch! Your data was encrypted with a different key.";
+  const encryptedBuffer = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+  const ivBuffer = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivBuffer }, key, encryptedBuffer);
+  switch (type) {
+   case "ArrayBuffer": return decrypted;
+   case "File": return new Blob([decrypted]);
+   case "number": return Number(new TextDecoder().decode(decrypted));
+   case "boolean": return new TextDecoder().decode(decrypted) === "true";
+   case "object": return JSON.parse(new TextDecoder().decode(decrypted));
+   default: return new TextDecoder().decode(decrypted);
+  }
+ } catch (err) {
+  if (err.stack) alert(err.stack);
+  else notify(err);
+ }
+}
+
+async function exportKey(keyId, key, keyName) {
+ let name = (keyName || keyId) + '.atk';
+ let rawKey = await crypto.subtle.exportKey('raw', key);
+ let description = 'AES Trancrypt Key';
+ let json = JSON.stringify({
+  name: keyName,
+  id: keyId,
+  key: Array.from(new Uint8Array(rawKey))
+ });
+ saveFile(name, json, description);
+}
+
+async function importKeys() {
+ const files = await openFile('AES Trancrypt Key', '.atk', true);
+ for (let x = 0; x < files.length; x++) {
+  let file = await files[x].getFile();
+  try {
+   const rawText = await file.text();
+   const json = JSON.parse(rawText);
+   const id = json.id;
+   const name = json.name;
+   if (keyBank[id]) throw 'Key already loaded.';
+   const rawKey = new Uint8Array(json.key).buffer;
+   const k = await crypto.subtle.importKey(
+    'raw',
+    rawKey,
+    {
+     name: 'AES-GCM',
+     length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt']
+   );
+   addKey(id, k, name);
+   renderEncryption();
+  } catch (err) {
+   notify('Error importing key: ' + err);
+  }
+ }
+}
+
+async function openFile(description, accept, multiple) {
+ const handle = await window.showOpenFilePicker({
+  types: [{
+   description,
+   accept: accept ? { 'application/octet-stream': [accept] } : undefined
+  }],
+  id: 'picker',
+  multiple,
+  startIn: 'downloads'
+ });
+ if (multiple) return handle;
+ else {
+  const [fileHandle] = handle;
+  const file = await fileHandle.getFile();
+  return file;
+ }
+}
+
+async function saveFile(name, data, description) {
+ try {
+  const ext = '.' + name.split('.').pop();
+  const handle = await window.showSaveFilePicker({
+   suggestedName: name,
+   startIn: 'downloads',
+   id: 'picker',
+   types: [{
+    description: description || 'AES Trancrypt File',
+    accept: { 'application/octet-stream': [ext] }
+   }]
+  });
+  const writable = await handle.createWritable();
+  await writable.write(data);
+  await writable.close();
+ } catch (err) {
+  notify("Error saving file: " + err);
+ }
+}
+
+async function downloadEncryptedData() {
+ saveFile('encrypted.txt.atf', qs('#render-encrypt').value);
+}
+
+async function downloadDecryptedData() {
+ saveFile('decrypted.txt', qs('#render-decrypt').innerHTML);
+}
+
+async function encryptFile() {
+ let d = qs('#download-dialog');
+ let download = qs('#download');
+ let mode = qs('#mode');
+ mode.innerText = 'encrypting...';
+ d.showModal();
+ const file = await openFile();
+ const data = await encrypt(file);
+ mode.innerText = 'encryption complete';
+ download.hidden = false;
+ download.onclick = async () => {
+  try {
+   await saveFile(file.name + '.atf', data);
+  } catch(err){}
+  download.hidden = true;
+  d.close();
+ }
+}
+
+async function decryptFile() {
+ const d = qs('#download-dialog');
+ const download = qs('#download');
+ try {
+  let mode = qs('#mode');
+  mode.innerText = 'decrypting...';
+  d.showModal();
+  const file = await openFile('AES Trancrypt File', '.atf');
+  const text = await file.text();
+  const data = await decrypt(text);
+  mode.innerText = 'decryption complete';
+  download.hidden = false;
+  download.onclick = async () => {
+   await saveFile(file.name.replace(/.atf$/, ''), data);
+   download.hidden = false;
+   d.close();
+  } 
+ } catch(err) {
+   notify(err);
+   mode.innerText = 'decryption failed...';
+   setTimeout(() => d.close(), 3000);
+ }
+}
+
+async function rekey() {
+ let id = crypto.randomUUID();
+ let k = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+ addKey(id, k);
+ renderEncryption();
+}
+
+function addKey(id, k, name) {
+  keyBank[id] = {buffer: k, name};
+  let o = document.createElement('option');
+  o.id = id;
+  o.innerText = name || id;
+  o.value = id;
+  let kn = qs('#key-name');
+  kn.append(o);
+  kn.value = id;
+  if (localStorage.rememberKeys) saveMemory();
+  addKeyManagement(id, k, name);
+  selectKey(id);
+}
+
+function selectKey(id) {
+ keyId = id;
+ key = keyBank[id].buffer;
+ keyName = keyBank[id].name;
+}
+
+function addKeyManagement(id, k, name) {
+ let keyTable = qs('#key-table');
+ let row = keyTable.insertRow();
+ let cells = new Array(3).fill(0).map(() => row.insertCell());
+ cells[0].textContent = id;
+ cells[1].textContent = name || '';
+ cells[1].contentEditable = 'plaintext-only';
+ cells[1].oninput = () => {
+  const kn = cells[1].textContent;
+  keyBank[id].name = kn;
+  let o = document.getElementById(id);
+  o.textContent = kn;
+ }
+ let ex = document.createElement('btn');
+ ex.innerText = 'E';
+ ex.title = 'Export Key';
+ ex.onclick = () => exportKey(id, k, keyBank[id].name);
+ let de = document.createElement('btn');
+ de.innerText = 'D';
+ de.title = 'Delete Key';
+ de.onclick = () => deleteKey(id, row);
+ cells[2].append(ex, de);
+}
+
+function deleteKey(id, row) {
+ if (!confirm('Are you sure you want do delete key: ' + keyBank[id].name || id)) return false;
+ delete keyBank[id];
+ document.getElementById(id).remove();
+ row.remove();
+ saveMemory();
+}
+
+async function saveMemory() {
+ try {
+  const keyStore = {};
+  for (let k in keyBank) {
+   const key = keyBank[k].buffer;
+   const raw = await crypto.subtle.exportKey('raw', key);
+   keyStore[k] = {buffer: Array.from(new Uint8Array(raw)), name: keyBank[k].name};
+  }
+  localStorage.keys = JSON.stringify(keyStore);
+ } catch(err) {notify('Could not save keys: ' + err)}
+}
+
+async function loadMemory() {
+ try {
+  qs('#remember').checked = true;
+  const keyStore = JSON.parse(localStorage.keys);
+  for (let k in keyStore) {
+   const kName = keyStore[k].name;
+   const key = keyStore[k].buffer;
+   const buffer = new Uint8Array(key).buffer;
+   const trueKey = await crypto.subtle.importKey(
+    'raw',
+    buffer,
+    {
+     name: 'AES-GCM',
+     length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt']
+   );
+   addKey(k, trueKey, kName);
+  }
+ } catch(err) {notify('Could not load local keys: ' + err)}
+ if (Object.keys(keyBank).length < 1) rekey();
+}
+
+function changeMemoryMode() {
+ if (this.checked) {
+  saveMemory();
+  localStorage.rememberKeys = 'true';
+ } else {
+  let zeroString = '0'.repeat(localStorage.key.length);
+  localStorage.keys = zeroString;
+  delete localStorage.keys;
+  delete localStorage.rememberKeys;
+ }
+}
+
+addEventListener('load', load);
+async function load() {
+ qs('#remember').onchange = changeMemoryMode;
+ if (localStorage.rememberKeys) loadMemory(); 
+ else rekey();
+ let range = document.createRange();
+ range.selectNodeContents(qs('#encrypt'));
+ let sel = window.getSelection();
+ sel.removeAllRanges();
+ sel.addRange(range);
+ if (!localStorage.hidePopup) qs('#securityDialog').showModal();
+}
+</script>
+ </head>
+
+<body>
+ <flex>
+  <btn onclick="qs('#key-management').showModal()">Key Management</btn>
+  <grow></grow>
+  <btn onclick="qs('#securityDialog').showModal()">Security</btn>
+ </flex>
+ <div><b>Encrypt Key:</b> <select id="key-name" onchange="selectKey(this.value); renderEncryption()"></select></div>
+ <div>Remember Keys: <input id="remember" type="checkbox">
+ <hr>
+
+ <flex id="controller">
+  <btn data-selected="true" onclick="showView('text-view', this)">Text</btn>
+  <btn onclick="showView('file-view', this)">File</btn>
+ </flex>
+
+ <div class="view" id="text-view" data-selected="true">
+  <h3>Encrypt</h3>
+  <flex>
+   <div id="encrypt" oninput="renderEncryptionTimeout()" contenteditable></div>
+   <input id="render-encrypt" readonly onclick="this.select(); navigator.clipboard.writeText(this.value); notify('Copied to  clipboard!');">
+   <btn onclick="downloadEncryptedData()">Download as File</btn>
+  </flex>
+  <h3>Decrypt</h3>
+  <flex>
+   <input id="decrypt" oninput="renderDecryption()">
+   <div id="render-decrypt"></div>
+   <btn onclick="downloadDecryptedData()">Download as File</btn>
+  </flex>
+ </div>
+ <div class="view" id="file-view">
+  Encrypt File: <btn onclick="encryptFile()">Select File</btn>
+  <p>Decrypt File: <btn onclick="decryptFile()">Select File</btn>
+ </div>
+
+ <dialog id="download-dialog">
+  <h1 id="mode"></h1>
+  <btn id="download" hidden>Download File...</btn>
+ </dialog>
+
+ <dialog id="securityDialog">
+  <h1>Archtelos Trancrypt</h1>
+  <h2>🔒 AES-256 Encryption & Secure Key Management</h2>
+  <p>Protect your information with industry-standard encryption technology.</p>
+  <p>Encrypt and decrypt text & files while managing your keys securely.</p>
+  <p><b>❗ Note:</b> This application generates/loads keys locally and they are NOT sent over your network.</p>
+  <hr>
+  <h3>🛡️ Safety Instructions</h3>
+  <ul style="text-align: left;">
+   <li><strong>🔑 Keep Your Encryption Keys Safe:</strong> Never share or store your encryption keys in unprotected locations.</li>
+   <li><strong>📁 Side-Loading Symmetric Keys:</strong> Do not send or receive keys over the internet. Keys are generated on your machine and should be shared via alternate means, such as USB or disk. <a href="./sideload.html" target="sideload">Read more</a>.</li>
+   <li><strong>🔄 Regular Key Rotation:</strong> Update keys periodically to enhance security.</li>
+  </ul>
+
+  <hr>
+  <p>Ready to encrypt your data? Generate a secure AES-256 key and get started.</p>
+  <btn onclick="qs('#securityDialog').close()">Got It!</btn>
+  <btn onclick="qs('#securityDialog').close(); localStorage.hidePopup = 'true';">Don't Show Again</btn>
+ </dialog>
+
+ <dialog id="key-management">
+  <btn onclick="qs('#key-management').close()">Close</btn>
+  <btn onclick="importKeys()">Import Key(s)</btn>
+  <btn onclick="rekey()">New Key</btn>
+  <h3>Key Management</h3>
+  <table id="key-table">
+   <tr><th>ID</th><th>Name</th><th>Tools</th></tr>
+  </table>
+ </dialog>
+
+ <div id="notifications"></div>
+</body>
+</html>

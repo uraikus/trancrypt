@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Archtelos Trancrypt | Sideload</title>
+    <style>
+        html {
+           background: linear-gradient(to bottom right, rgb(30 30 30), rgb(20 20 80)) fixed;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            color: #333;
+        }
+        btn {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 0 3px black;
+            border-radius: 3px;
+            padding: 4px;
+            margin: 0 5px;
+            height: 20px;
+            background-color: silver;
+            color: black;
+            user-select: none;
+            text-decoration: none;
+            transition: color .6s, box-shadow .6s;
+        }
+        btn:hover {
+            color: rgb(20 20 120);
+            box-shadow: 0 0 3px rgb(200 200 250);
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .highlight {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Why Should I Sideload My Keys?</h1>
+    <p>Modern network security relies heavily on asymmetric encryption (such as RSA and ECC) to protect sensitive data during transmission. However, quantum computing poses a significant threat to these cryptographic methods.</p>
+    
+    <h2>Why Quantum Computing is Dangerous for Encryption</h2>
+    <ul>
+        <li><strong>Shor's Algorithm:</strong> Quantum computers can efficiently factor large numbers, breaking RSA encryption.</li>
+        <li><strong>Elliptic Curve Vulnerabilities:</strong> ECC security relies on mathematical problems that quantum algorithms can solve quickly.</li>
+        <li><strong>Key Size Limitations:</strong> Traditional encryption keys, once considered unbreakable, are vulnerable to quantum attacks.</li>
+    </ul>
+
+    <h2>Potential Consequences</h2>
+    <p>Once quantum computers become powerful enough, encrypted data that is sent over networks today could be easily decrypted, leading to <span class="highlight">data breaches, identity theft, and loss of sensitive information</span>.</p>
+
+    <h2>Solutions & Future Approaches</h2>
+    <p>To mitigate the risks posed by quantum computing, one effective strategy is using <strong>sideloaded AES symmetric keys</strong>. Unlike asymmetric encryption, which relies on factorization-based keys vulnerable to quantum attacks, AES (Advanced Encryption Standard) operates on a different principle: a single key is used for both encryption and decryption.</p>
+
+    <h3>What are Sideloaded AES Symmetric Keys?</h3>
+    <p>Sideloaded keys refer to encryption keys that are securely transmitted through an offline or alternative secure channel rather than over the network. This process eliminates exposure to potential interception by quantum-capable adversaries.</p>
+
+    <h3>Why is This Approach Safer?</h3>
+    <ul>
+        <li><strong>Quantum-Safe Encryption:</strong> Unlike RSA or ECC, AES encryption is resistant to quantum attacks, since quantum algorithms like Shor’s only affect asymmetric cryptography.</li>
+        <li><strong>Minimized Exposure:</strong> By sideloading keys outside of the main communication channel, attackers cannot easily intercept them.</li>
+        <li><strong>Efficient & Fast:</strong> AES provides high-speed encryption while maintaining strong security, making it an ideal choice for future-proofing encryption.</li>
+    </ul>
+
+    <p>Organizations should consider adopting AES encryption with sideloaded keys as part of a broader quantum-resistant security strategy to protect data from evolving threats.</p>
+
+    <h1>Encrypt Your Data Now: The Quantum Threat is Coming</h1>
+    <p>Quantum computing will render traditional encryption obsolete, posing a massive risk to sensitive data. What seems secure today may not be safe tomorrow. Here's why encrypting data now is crucial:</p>
+
+    <h2>⚠️ Future Quantum Decryption: The Silent Threat</h2>
+    <p>Encrypted network traffic that is difficult to crack today <span class="highlight">can be stored and decrypted later</span> once quantum computers become powerful enough. This means private and sensitive information transmitted now could be compromised in the future.</p>
+
+    <h2>Why Encrypt Now Instead of Later?</h2>
+    <ul>
+        <li><strong>Data Harvesting Risks:</strong> Cybercriminals and state actors are already collecting encrypted data, waiting for quantum computing to break current cryptographic protections.</li>
+        <li><strong>Quantum Algorithms Will Break RSA & ECC:</strong> Shor’s algorithm enables quantum computers to factorize large numbers, effectively breaking asymmetric encryption.</li>
+        <li><strong>Long-Term Security:</strong> Sensitive data such as financial records, government secrets, and private communications must be secured now to prevent exposure later.</li>
+        <li><strong>Post-Quantum Cryptography Adoption:</strong> Transitioning to quantum-resistant algorithms like lattice-based cryptography or sideloaded AES keys ensures long-term security.</li>
+        <li><strong>Regulatory & Compliance Preparation:</strong> Governments and organizations are beginning to require quantum-safe encryption, so adopting secure practices now prevents future regulatory issues.</li>
+        <li><strong>Business & Consumer Trust:</strong> Companies that implement quantum-resistant security today will build trust and prevent data breaches down the road.</li>
+        <li><strong>Proactive Cyber Defense:</strong> Waiting until quantum computers become mainstream is too late—acting now strengthens security against future threats.</li>
+    </ul>
+
+    <p style="text-align: center; font-weight: bold;">Data encrypted today could be at risk tomorrow. Future-proof your security now!</p>
+    <b>Start protecting your data: </b><a href="./index.html"><btn>Open Trancrypt</btn></a>
+</div>
+
+</body>
+</html>
