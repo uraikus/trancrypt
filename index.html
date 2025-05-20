@@ -65,10 +65,10 @@
     margin: 5px;
     align-items: center;
    }
-   grow {
+   grow, [grow] {
     flex-grow: 1;
    }
-   flex > div, flex input {
+   #render-decrypt, #encrypt, .view input {
     border: 3px outset black;
     border-radius: 8px;
     outline: none;
@@ -216,11 +216,12 @@ async function decrypt(jsonString) {
  if (!jsonString) return "";
  try {
   const { encrypted, iv, type, name } = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
-  let key = keyBank[name].buffer;
-  if (!key) throw "Key mismatch! Your data was encrypted with a different key.";
+  const k = keyBank[name];
+  if (!k) throw 'Key mismatch! Your data was encrypted with a different key.';
+  const keyBuffer = k.buffer;
   const encryptedBuffer = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
   const ivBuffer = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivBuffer }, key, encryptedBuffer);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivBuffer }, keyBuffer, encryptedBuffer);
   switch (type) {
    case "ArrayBuffer": return decrypted;
    case "File": return new Blob([decrypted]);
@@ -365,6 +366,53 @@ async function decryptFile() {
  }
 }
 
+async function encryptDirectory() {
+ try {
+  let dirHandle = await showDirectoryPicker();
+  await allFiles(dirHandle);
+  notify('Directory has been encrypted!');
+
+  async function allFiles(h) {
+   for await (const entry of h.values()) {
+    if (entry.kind === 'file') {
+     const file = await entry.getFile();
+     const encrypted = await encrypt(file);
+     const newName = entry.name + '.atf';
+     const newFileHandle = await h.getFileHandle(newName, {create:true});
+     const writableStream = await newFileHandle.createWritable();
+     await writableStream.write(encrypted);
+     await writableStream.close();
+     await h.removeEntry(entry.name);
+    } else if (entry.kind === 'directory') await allFiles(entry);
+   }
+  }
+ } catch(err) {err.stack ? alert(err.stack) : notify(err)}
+}
+
+async function decryptDirectory() {
+ try {
+  let dirHandle = await showDirectoryPicker();
+  await allFiles(dirHandle);
+  notify('Directory has been decrypted!');
+
+  async function allFiles(h) {
+   for await (const entry of h.values()) {
+    if (entry.kind === 'file') {
+     const file = await entry.getFile();
+     const text = await file.text();
+     const decrypted = await decrypt(text);
+     const newName = entry.name.replace(/.atf$/, '');
+     const newFileHandle = await h.getFileHandle(newName, {create:true});
+     const writableStream = await newFileHandle.createWritable();
+     await writableStream.write(decrypted);
+     await writableStream.close();
+     await h.removeEntry(entry.name);
+    } else if (entry.kind === 'directory') await allFiles(entry);
+   }
+  }
+ } catch(err) {err.stack ? alert(err.stack) : notify(err)}
+}
+
 async function rekey() {
  let id = crypto.randomUUID();
  let k = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
@@ -393,6 +441,7 @@ function selectKey(id) {
 }
 
 function addKeyManagement(id, k, name) {
+ let saveTimeout;
  let keyTable = qs('#key-table');
  let row = keyTable.insertRow();
  let cells = new Array(3).fill(0).map(() => row.insertCell());
@@ -404,6 +453,8 @@ function addKeyManagement(id, k, name) {
   keyBank[id].name = kn;
   let o = document.getElementById(id);
   o.textContent = kn;
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(saveMemory, 2000);
  }
  let ex = document.createElement('btn');
  ex.innerText = 'E';
@@ -493,32 +544,48 @@ async function load() {
   <grow></grow>
   <btn onclick="qs('#securityDialog').showModal()">Security</btn>
  </flex>
- <div><b>Encrypt Key:</b> <select id="key-name" onchange="selectKey(this.value); renderEncryption()"></select></div>
  <div>Remember Keys: <input id="remember" type="checkbox">
+ <div><b>Encryption Key:</b> <select id="key-name" onchange="selectKey(this.value); renderEncryption()"></select></div>
  <hr>
 
  <flex id="controller">
-  <btn data-selected="true" onclick="showView('text-view', this)">Text</btn>
+  <btn data-selected="true" onclick="showView('encrypt-view', this)">Encrypt</btn>
+  <btn onclick="showView('decrypt-view', this)">Decrypt</btn>
   <btn onclick="showView('file-view', this)">File</btn>
+  <btn onclick="showView('dir-view', this)">Directory</btn>
  </flex>
 
- <div class="view" id="text-view" data-selected="true">
+ <div class="view" id="encrypt-view" data-selected="true">
   <h3>Encrypt</h3>
   <flex>
-   <div id="encrypt" oninput="renderEncryptionTimeout()" contenteditable></div>
+  Input:
+   <div grow id="encrypt" oninput="renderEncryptionTimeout()" contenteditable></div>
+  </flex>
+  <flex>
+   Output:
    <input id="render-encrypt" readonly onclick="this.select(); navigator.clipboard.writeText(this.value); notify('Copied to  clipboard!');">
    <btn onclick="downloadEncryptedData()">Download as File</btn>
   </flex>
+</div>
+<div class="view" id="decrypt-view">
   <h3>Decrypt</h3>
   <flex>
-   <input id="decrypt" oninput="renderDecryption()">
-   <div id="render-decrypt"></div>
+   Input:
+   <input grow id="decrypt" oninput="renderDecryption()">
+  </flex>
+  <flex>
+   Output: 
+   <div id="render-decrypt" grow></div>
    <btn onclick="downloadDecryptedData()">Download as File</btn>
   </flex>
  </div>
  <div class="view" id="file-view">
   Encrypt File: <btn onclick="encryptFile()">Select File</btn>
   <p>Decrypt File: <btn onclick="decryptFile()">Select File</btn>
+ </div>
+ <div class="view" id="dir-view">
+  Encrypt Directory: <btn onclick="encryptDirectory()">Select Directory</btn>
+  <p>Decrypt Directory: <btn onclick="decryptDirectory()">Select Directory</btn>
  </div>
 
  <dialog id="download-dialog">
